@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batch HTML → PNG Converter</title>
+<script src="html2canvas.min.js"></script>
+<style>
+  :root{
+    --ink:#1b1f23;
+    --paper:#f7f5f0;
+    --line:#1b1f23;
+    --accent:#cc5b3c;
+    --accent-soft:#f0e3da;
+    --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height:100vh;
+  }
+  .wrap{
+    max-width:760px;
+    margin:0 auto;
+    padding:48px 24px 80px;
+  }
+  header{
+    border-bottom:2px solid var(--line);
+    padding-bottom:20px;
+    margin-bottom:32px;
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  h1{
+    font-size:22px;
+    letter-spacing:-0.01em;
+    margin:0;
+    font-weight:700;
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 6px;
+  }
+  .tag{
+    font-family:var(--mono);
+    font-size:11px;
+    color:#6b6f73;
+  }
+
+  .drop{
+    border:2px dashed #c9c3b6;
+    border-radius:4px;
+    padding:40px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+    background:#fff;
+  }
+  .drop.drag{
+    border-color:var(--accent);
+    background:var(--accent-soft);
+  }
+  .drop p{margin:0 0 4px; font-size:15px;}
+  .drop .sub{font-size:12.5px; color:#83807a; font-family:var(--mono);}
+  input[type=file]{display:none;}
+
+  .file-row{
+    display:none;
+    margin-top:16px;
+    padding:12px 16px;
+    background:#fff;
+    border:1px solid #1b1f23;
+    border-radius:4px;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    font-size:13.5px;
+  }
+  .file-row.show{display:flex;}
+  .file-row .name{font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;}
+  .file-row button{
+    border:none;
+    background:none;
+    color:#8a3324;
+    font-family:var(--mono);
+    font-size:12px;
+    cursor:pointer;
+    text-decoration:underline;
+    flex-shrink:0;
+  }
+
+  .panel{
+    margin-top:28px;
+    border-top:1px solid #d9d3c4;
+    padding-top:24px;
+  }
+  .panel-title{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:#83807a;
+    margin:0 0 14px;
+  }
+  .options{
+    display:grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap:14px 18px;
+  }
+  @media (max-width:540px){
+    .options{grid-template-columns:1fr;}
+  }
+  .opt label{
+    display:block;
+    font-size:13px;
+    margin-bottom:6px;
+    color:#44484c;
+  }
+  select, input[type=number]{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid #c9c3b6;
+    border-radius:3px;
+    font-size:13.5px;
+    font-family:var(--mono);
+    background:#fff;
+    color:var(--ink);
+  }
+  select:focus, input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+
+  .transparent-row{
+    grid-column:1 / -1;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .transparent-row input{width:auto;}
+  .transparent-row label{margin:0; font-size:13px; color:#44484c;}
+
+  .run{
+    margin-top:28px;
+    width:100%;
+    padding:15px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:3px;
+    font-size:14.5px;
+    font-weight:600;
+    letter-spacing:0.01em;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .run:hover:not(:disabled){background:#33373b;}
+  .run:disabled{
+    background:#c9c3b6;
+    cursor:not-allowed;
+  }
+
+  .status{
+    margin-top:16px;
+    display:none;
+    align-items:center;
+    gap:10px;
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:#44484c;
+  }
+  .status.show{display:flex;}
+  .spinner{
+    width:14px; height:14px;
+    border:2px solid #d9d3c4;
+    border-top-color:var(--accent);
+    border-radius:50%;
+    animation:spin 0.7s linear infinite;
+    flex-shrink:0;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .error{
+    margin-top:16px;
+    display:none;
+    padding:12px 14px;
+    background:#fbeae6;
+    border:1px solid #c0432c;
+    border-radius:3px;
+    font-size:13px;
+    color:#8a3324;
+  }
+  .error.show{display:block;}
+
+  /* --- BATCH RESULTS CONTAINER --- */
+  .results-container {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .download-all-wrap {
+    display: none;
+    margin-bottom: 8px;
+    text-align: right;
+  }
+  .download-all-wrap.show {
+    display: block;
+  }
+  .download-all-btn {
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .download-all-btn:hover { background: #33373b; }
+
+  .result{
+    border:1px solid #1b1f23;
+    border-radius:4px;
+    overflow:hidden;
+    background:#fff;
+    animation: fadeIn 0.4s ease-out;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .result-preview{
+    background:
+      linear-gradient(45deg,#eee 25%,transparent 25%) -8px 0/16px 16px,
+      linear-gradient(-45deg,#eee 25%,transparent 25%) -8px 0/16px 16px,
+      linear-gradient(45deg,transparent 75%,#eee 75%) -8px 0/16px 16px,
+      linear-gradient(-45deg,transparent 75%,#eee 75%) -8px 0/16px 16px,
+      #fff;
+    max-height:300px;
+    overflow:auto;
+    display:flex;
+    justify-content:center;
+    padding:16px;
+  }
+  .result-preview img{
+    max-width:100%;
+    display:block;
+    box-shadow:0 1px 6px rgba(0,0,0,0.18);
+  }
+  .result-meta{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    padding:14px 16px;
+    border-top:1px solid #e4e0d4;
+    flex-wrap:wrap;
+  }
+  .result-meta .details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .result-meta .filename {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .result-meta .dims{
+    font-family:var(--mono);
+    font-size:12px;
+    color:#6b6f73;
+  }
+  .download-btn{
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    padding:8px 16px;
+    border-radius:3px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .download-btn:hover{background:#a8492f;}
+
+  .render-stage{
+    position:fixed;
+    top:0; left:-99999px;
+    visibility:visible;
+    pointer-events:none;
+    z-index:-1;
+  }
+  iframe.capture-frame{
+    border:none;
+    display:block;
+  }
+
+  footer{
+    margin-top:36px;
+    font-family:var(--mono);
+    font-size:11px;
+    color:#9b9890;
+    line-height:1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">Batch Converter</p>
+      <h1>HTML to PNG Converter</h1>
+    </div>
+    <span class="tag">full-page · high-res · transparent</span>
+  </header>
+
+  <div class="drop" id="drop">
+    <p>Drop HTML files here, or click to browse</p>
+    <p class="sub">Select multiple files to process them as a batch</p>
+  </div>
+  <input type="file" id="fileInput" accept=".html,text/html" multiple>
+
+  <div class="file-row" id="fileRow">
+    <span class="name" id="fileName"></span>
+    <button id="clearFile">clear queue</button>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Output settings</p>
+    <div class="options">
+      <div class="opt">
+        <label for="scale">Resolution</label>
+        <select id="scale">
+          <option value="1">1× — screen</option>
+          <option value="2">2× — retina</option>
+          <option value="3" selected>3× — print quality</option>
+          <option value="4">4× — extra high-res</option>
+        </select>
+      </div>
+      <div class="opt">
+        <label for="preset">Preset</label>
+        <select id="preset">
+          <option value="none" selected>None — use natural size</option>
+          <option value="etsy">Etsy listing (2000×2000 canvas-friendly)</option>
+          <option value="gumroad">Gumroad preview (1280 wide)</option>
+          <option value="a4">A4 print (210×297mm @ 300dpi)</option>
+        </select>
+      </div>
+      <div class="transparent-row">
+        <input type="checkbox" id="transparent" checked>
+        <label for="transparent">Transparent background</label>
+      </div>
+    </div>
+  </div>
+
+  <button class="run" id="runBtn" disabled>Convert to PNG</button>
+
+  <div class="status" id="status">
+    <span class="spinner"></span>
+    <span id="statusText">Rendering High Resolution PNG...</span>
+  </div>
+
+  <div class="error" id="error"></div>
+
+  <div class="download-all-wrap" id="downloadAllWrap">
+    <button class="download-all-btn" id="downloadAllBtn">📥 Download All PNGs</button>
+  </div>
+  <div class="results-container" id="resultsContainer"></div>
+
+  <footer>
+    Capture runs entirely in your browser. Nothing is uploaded anywhere.<br>
+    Large pages are automatically split into tiles and stitched back together to stay under browser canvas limits.
+  </footer>
+</div>
+
+<div class="render-stage" id="renderStage"></div>
+
+<script>
+(function(){
+  const drop = document.getElementById('drop');
+  const fileInput = document.getElementById('fileInput');
+  const fileRow = document.getElementById('fileRow');
+  const fileName = document.getElementById('fileName');
+  const clearFile = document.getElementById('clearFile');
+  const runBtn = document.getElementById('runBtn');
+  const statusBox = document.getElementById('status');
+  const statusText = document.getElementById('statusText');
+  const errorBox = document.getElementById('error');
+  
+  const resultsContainer = document.getElementById('resultsContainer');
+  const downloadAllWrap = document.getElementById('downloadAllWrap');
+  const downloadAllBtn = document.getElementById('downloadAllBtn');
+  
+  const renderStage = document.getElementById('renderStage');
+  const scaleSelect = document.getElementById('scale');
+  const presetSelect = document.getElementById('preset');
+  const transparentCheckbox = document.getElementById('transparent');
+
+  const MAX_TILE_DIM = 8000;
+  const MAX_CANVAS_AREA = 16777216 * 2;
+
+  // ARRAY TO HOLD MULTIPLE FILES
+  let currentFiles = [];
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+  }
+  function clearError(){
+    errorBox.classList.remove('show');
+    errorBox.textContent = '';
+  }
+  function setStatus(msg){
+    statusText.textContent = msg;
+    statusBox.classList.add('show');
+  }
+  function hideStatus(){
+    statusBox.classList.remove('show');
+  }
+
+  // HANDLE MULTIPLE FILE UPLOADS
+  function setFiles(files){
+    if (!files || files.length === 0) return;
+    
+    // Filter to ensure only .html files are accepted
+    const validFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.html') || f.type === 'text/html');
+    
+    if (validFiles.length === 0) {
+      showError('Please choose at least one .html file.');
+      return;
+    }
+    
+    clearError();
+    currentFiles = validFiles;
+    
+    // Update UI text based on single vs multiple
+    if (currentFiles.length === 1) {
+      fileName.textContent = currentFiles[0].name;
+      runBtn.textContent = "Convert to PNG";
+    } else {
+      fileName.textContent = `${currentFiles.length} files queued for conversion`;
+      runBtn.textContent = `Convert ${currentFiles.length} Files`;
+    }
+    
+    fileRow.classList.add('show');
+    runBtn.disabled = false;
+    resultsContainer.innerHTML = ''; // Clear old results
+    downloadAllWrap.classList.remove('show');
+  }
+
+  // --- ANDROID BRIDGE SUPPORT ---
+  // When running inside the Android WebView wrapper, window.AndroidBridge is injected.
+  // We use it to launch the native multi-file picker (since <input type=file multiple>
+  // can be unreliable across WebView/OS versions for arbitrary file types) and to save
+  // PNGs straight to the Downloads folder via MediaStore instead of relying on
+  // blob: URLs + <a download>, which WebView does not support.
+  const isAndroid = !!window.AndroidBridge;
+
+  drop.addEventListener('click', () => {
+    if (isAndroid) {
+      window.AndroidBridge.pickFiles();
+    } else {
+      fileInput.click();
+    }
+  });
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('drag');
+    setFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', (e) => setFiles(e.target.files));
+
+  // Called from native Android code after the user picks files in the native picker.
+  // `filesPayload` is a JSON string: [{ name: "foo.html", content: "<html>..." }, ...]
+  window.receiveFilesFromAndroid = function(filesPayload){
+    try {
+      const parsed = JSON.parse(filesPayload);
+      if (!parsed || parsed.length === 0) return;
+      // Wrap as lightweight File-like objects so the rest of the pipeline
+      // (which expects File objects with .name and works with readFileAsText) is untouched.
+      const pseudoFiles = parsed.map(f => new File([f.content], f.name, { type: 'text/html' }));
+      setFiles(pseudoFiles);
+    } catch (e) {
+      showError('Could not read the files chosen from Android picker.');
+    }
+  };
+  
+  clearFile.addEventListener('click', () => {
+    currentFiles = [];
+    fileInput.value = '';
+    fileRow.classList.remove('show');
+    runBtn.disabled = true;
+    runBtn.textContent = "Convert to PNG";
+    resultsContainer.innerHTML = '';
+    downloadAllWrap.classList.remove('show');
+  });
+
+  function readFileAsText(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(new Error('Could not read the file.'));
+      r.readAsText(file);
+    });
+  }
+
+  function waitForContentDocument(iframe, timeoutMs){
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      (function poll(){
+        const doc = iframe.contentDocument;
+        if (doc && doc.defaultView) {
+          resolve(doc);
+          return;
+        }
+        if (Date.now() - start > timeoutMs) {
+          reject(new Error('Could not access the document inside the preview frame.'));
+          return;
+        }
+        requestAnimationFrame(poll);
+      })();
+    });
+  }
+
+  async function buildFrame(htmlString){
+    const iframe = document.createElement('iframe');
+    iframe.className = 'capture-frame';
+    iframe.style.width = '1024px';
+    iframe.style.height = '768px';
+    renderStage.appendChild(iframe);
+
+    try {
+      const doc = await waitForContentDocument(iframe, 5000);
+
+      doc.open();
+      doc.write(htmlString);
+      doc.close();
+
+      const win = iframe.contentWindow;
+
+      const sheets = Array.from(doc.querySelectorAll('link[rel="stylesheet"]'));
+      const sheetPromises = sheets.map(link => new Promise(res => {
+        if (link.sheet) return res();
+        link.addEventListener('load', res, { once: true });
+        link.addEventListener('error', res, { once: true });
+        setTimeout(res, 5000);
+      }));
+
+      const imgs = Array.from(doc.querySelectorAll('img'));
+      const imgPromises = imgs.map(img => new Promise(res => {
+        if (img.complete) return res();
+        img.addEventListener('load', res, { once: true });
+        img.addEventListener('error', res, { once: true });
+        setTimeout(res, 8000);
+      }));
+
+      const styleBlocks = Array.from(doc.querySelectorAll('style'));
+      const importUrls = [];
+      const importRegex = /@import\s+url\(\s*['"]?([^'")]+)['"]?\s*\)/g;
+      styleBlocks.forEach(styleEl => {
+        const cssText = styleEl.textContent || '';
+        let match;
+        while ((match = importRegex.exec(cssText)) !== null) {
+          importUrls.push(match[1]); 
+        }
+      });
+
+      const importPromises = importUrls.map(href => new Promise(res => {
+        const link = doc.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        link.addEventListener('load', res, { once: true });
+        link.addEventListener('error', res, { once: true });
+        doc.head.appendChild(link);
+        setTimeout(res, 6000);
+      }));
+
+      await Promise.all(importPromises);
+
+      let fontPromise = Promise.resolve();
+      if (doc.fonts) {
+        try {
+          const loadAll = Array.from(doc.fonts).map(f => f.load().catch(() => {}));
+          await Promise.race([
+            Promise.all(loadAll),
+            new Promise(res => setTimeout(res, 6000))
+          ]);
+        } catch (e) {}
+
+        if (doc.fonts.ready) {
+          fontPromise = Promise.race([
+            doc.fonts.ready,
+            new Promise(res => setTimeout(res, 6000))
+          ]);
+        }
+      }
+
+      await Promise.all([...sheetPromises, ...imgPromises, fontPromise]);
+
+      if (doc.fonts && doc.fonts.ready) {
+        try {
+          const secondPass = Array.from(doc.fonts).map(f => f.load().catch(() => {}));
+          if (secondPass.length) {
+            await Promise.race([
+              Promise.all(secondPass),
+              new Promise(res => setTimeout(res, 3000))
+            ]);
+          }
+          await Promise.race([doc.fonts.ready, new Promise(res => setTimeout(res, 3000))]);
+        } catch (e) {}
+      }
+
+      await new Promise(res => setTimeout(res, 400));
+      await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+
+      const root = doc.documentElement;
+      const body = doc.body;
+      const contentWidth = Math.max(
+        root.scrollWidth, body ? body.scrollWidth : 0,
+        root.offsetWidth, body ? body.offsetWidth : 0
+      );
+      const contentHeight = Math.max(
+        root.scrollHeight, body ? body.scrollHeight : 0,
+        root.offsetHeight, body ? body.offsetHeight : 0
+      );
+
+      iframe.style.width = contentWidth + 'px';
+      iframe.style.height = contentHeight + 'px';
+
+      await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+      const finalWidth = Math.max(root.scrollWidth, body ? body.scrollWidth : 0, contentWidth);
+      const finalHeight = Math.max(root.scrollHeight, body ? body.scrollHeight : 0, contentHeight);
+      iframe.style.width = finalWidth + 'px';
+      iframe.style.height = finalHeight + 'px';
+
+      return { iframe, doc, win, width: finalWidth, height: finalHeight };
+    } catch (err) {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      throw err;
+    }
+  }
+
+  function applyPreset(preset, naturalW, naturalH){
+    switch(preset){
+      case 'etsy': return fitWithin(naturalW, naturalH, 2000, 2000);
+      case 'gumroad': return fitToWidth(naturalW, naturalH, 1280);
+      case 'a4': return { width: 2480, height: 3508, forceExact: true };
+      default: return null;
+    }
+  }
+  function fitWithin(w, h, maxW, maxH){
+    const ratio = Math.min(maxW / w, maxH / h, 1);
+    return { width: Math.round(w * ratio), height: Math.round(h * ratio) };
+  }
+  function fitToWidth(w, h, targetW){
+    const ratio = targetW / w;
+    return { width: targetW, height: Math.round(h * ratio) };
+  }
+
+  async function captureToCanvas(doc, contentWidth, contentHeight, pixelScale, transparent){
+    const totalPxW = Math.ceil(contentWidth * pixelScale);
+    const totalPxH = Math.ceil(contentHeight * pixelScale);
+    const totalArea = totalPxW * totalPxH;
+
+    const needsTiling = totalPxW > MAX_TILE_DIM || totalPxH > MAX_TILE_DIM || totalArea > MAX_CANVAS_AREA;
+
+    if (!needsTiling) {
+      const canvas = await html2canvas(doc.documentElement, {
+        scale: pixelScale,
+        useCORS: true,
+        backgroundColor: transparent ? null : '#ffffff',
+        width: contentWidth,
+        height: contentHeight,
+        windowWidth: contentWidth,
+        windowHeight: contentHeight,
+        scrollX: 0,
+        scrollY: 0,
+        logging: false
+      });
+      return canvas;
+    }
+
+    const maxTileCssDim = Math.max(200, Math.floor(MAX_TILE_DIM / pixelScale));
+    const cols = Math.ceil(contentWidth / maxTileCssDim);
+    const rows = Math.ceil(contentHeight / maxTileCssDim);
+    const tileCssW = Math.ceil(contentWidth / cols);
+    const tileCssH = Math.ceil(contentHeight / rows);
+
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = totalPxW;
+    finalCanvas.height = totalPxH;
+    const ctx = finalCanvas.getContext('2d');
+    if (!transparent) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, totalPxW, totalPxH);
+    }
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const offsetX = c * tileCssW;
+        const offsetY = r * tileCssH;
+        const thisTileW = Math.min(tileCssW, contentWidth - offsetX);
+        const thisTileH = Math.min(tileCssH, contentHeight - offsetY);
+
+        const tileCanvas = await html2canvas(doc.documentElement, {
+          scale: pixelScale,
+          useCORS: true,
+          backgroundColor: transparent ? null : '#ffffff',
+          width: contentWidth,
+          height: contentHeight,
+          windowWidth: contentWidth,
+          windowHeight: contentHeight,
+          x: offsetX,
+          y: offsetY,
+          scrollX: 0,
+          scrollY: 0,
+          logging: false
+        });
+
+        ctx.drawImage(
+          tileCanvas,
+          0, 0, tileCanvas.width, tileCanvas.height,
+          Math.round(offsetX * pixelScale), Math.round(offsetY * pixelScale),
+          Math.round(thisTileW * pixelScale), Math.round(thisTileH * pixelScale)
+        );
+      }
+    }
+    return finalCanvas;
+  }
+
+  function trimCanvas(canvas){
+    try {
+      const ctx = canvas.getContext('2d');
+      const { width, height } = canvas;
+      if (width === 0 || height === 0) return canvas;
+      const data = ctx.getImageData(0, 0, width, height).data;
+
+      let top = 0, bottom = height - 1, left = 0, right = width - 1;
+      const rowHasContent = (y) => {
+        const base = y * width * 4;
+        for (let x = 0; x < width; x++) {
+          if (data[base + x * 4 + 3] !== 0) return true;
+        }
+        return false;
+      };
+      const colHasContent = (x) => {
+        for (let y = 0; y < height; y++) {
+          if (data[(y * width + x) * 4 + 3] !== 0) return true;
+        }
+        return false;
+      };
+
+      const cornerAlphas = [
+        data[3], data[(width - 1) * 4 + 3],
+        data[((height - 1) * width) * 4 + 3],
+        data[((height - 1) * width + (width - 1)) * 4 + 3]
+      ];
+      const looksOpaque = cornerAlphas.every(a => a === 255);
+      if (looksOpaque) return canvas;
+
+      while (top < height && !rowHasContent(top)) top++;
+      while (bottom > top && !rowHasContent(bottom)) bottom--;
+      while (left < width && !colHasContent(left)) left++;
+      while (right > left && !colHasContent(right)) right--;
+
+      const trimmedW = right - left + 1;
+      const trimmedH = bottom - top + 1;
+      if (trimmedW <= 0 || trimmedH <= 0 || (trimmedW === width && trimmedH === height)) {
+        return canvas;
+      }
+
+      const trimmed = document.createElement('canvas');
+      trimmed.width = trimmedW;
+      trimmed.height = trimmedH;
+      trimmed.getContext('2d').drawImage(canvas, left, top, trimmedW, trimmedH, 0, 0, trimmedW, trimmedH);
+      return trimmed;
+    } catch (e) {
+      return canvas;
+    }
+  }
+
+  // --- HTML RESULT DOM GENERATOR ---
+  function appendResultCard(blobUrl, filename, width, height, base64Data) {
+    const card = document.createElement('div');
+    card.className = 'result';
+    card.innerHTML = `
+      <div class="result-preview"><img src="${blobUrl}" alt="Preview"></div>
+      <div class="result-meta">
+        <div class="details">
+          <span class="filename">${filename}</span>
+          <span class="dims">${width} × ${height} px</span>
+        </div>
+        <button class="download-btn">Download PNG</button>
+      </div>
+    `;
+
+    const btn = card.querySelector('.download-btn');
+    btn.dataset.filename = filename;
+
+    btn.addEventListener('click', () => {
+      if (isAndroid) {
+        // Native side decodes base64 and writes it into Downloads via MediaStore.
+        window.AndroidBridge.savePng(filename, base64Data);
+      } else {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    });
+
+    resultsContainer.appendChild(card);
+  }
+
+  // --- THE NEW BATCH CONVERSION LOOP ---
+  async function convert(){
+    if (currentFiles.length === 0) return;
+    
+    clearError();
+    resultsContainer.innerHTML = '';
+    downloadAllWrap.classList.remove('show');
+    runBtn.disabled = true;
+    
+    const preset = presetSelect.value;
+    const pixelScale = parseFloat(scaleSelect.value);
+    const transparent = transparentCheckbox.checked;
+    
+    // Loop through every file selected
+    for (let i = 0; i < currentFiles.length; i++) {
+      const file = currentFiles[i];
+      let frameInfo = null;
+      
+      try {
+        setStatus(`[${i + 1}/${currentFiles.length}] Reading: ${file.name}...`);
+        let htmlString = await readFileAsText(file);
+
+        // Keep the Ultimate HTML2Canvas Overlap Fix
+        const antiOverlapFix = `
+          <style>
+            * {
+              font-variant-ligatures: none !important;
+              font-feature-settings: "kern" 0, "liga" 0, "calt" 0 !important;
+              letter-spacing: 0.01px !important;
+            }
+          </style>
+        </head>`;
+        htmlString = htmlString.replace(/<\/head>/i, antiOverlapFix);
+
+        setStatus(`[${i + 1}/${currentFiles.length}] Loading assets...`);
+        frameInfo = await buildFrame(htmlString);
+
+        let { doc, width, height } = frameInfo;
+        if (!width || !height) throw new Error('Could not determine content dimensions.');
+
+        const presetResult = applyPreset(preset, width, height);
+        let targetCssWidth = width;
+        let targetCssHeight = height;
+
+        if (presetResult) {
+          if (presetResult.forceExact) {
+            targetCssWidth = width;
+            targetCssHeight = height;
+          } else if (presetResult.width !== width) {
+            frameInfo.iframe.style.width = presetResult.width + 'px';
+            await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+            const root = doc.documentElement;
+            const body = doc.body;
+            targetCssWidth = presetResult.width;
+            targetCssHeight = Math.max(root.scrollHeight, body ? body.scrollHeight : 0);
+            frameInfo.iframe.style.height = targetCssHeight + 'px';
+            await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+          }
+        }
+
+        setStatus(`[${i + 1}/${currentFiles.length}] Capturing layout...`);
+        let rawCanvas = await captureToCanvas(doc, targetCssWidth, targetCssHeight, pixelScale, transparent);
+
+        setStatus(`[${i + 1}/${currentFiles.length}] Trimming edges...`);
+        let finalCanvas = trimCanvas(rawCanvas);
+
+        if (preset === 'a4') {
+          setStatus(`[${i + 1}/${currentFiles.length}] Fitting to A4...`);
+          const a4 = document.createElement('canvas');
+          a4.width = 2480;
+          a4.height = 3508;
+          const actx = a4.getContext('2d');
+          if (!transparent) {
+            actx.fillStyle = '#ffffff';
+            actx.fillRect(0, 0, a4.width, a4.height);
+          }
+          const ratio = Math.min(a4.width / finalCanvas.width, a4.height / finalCanvas.height);
+          const drawW = Math.round(finalCanvas.width * ratio);
+          const drawH = Math.round(finalCanvas.height * ratio);
+          const dx = Math.round((a4.width - drawW) / 2);
+          const dy = Math.round((a4.height - drawH) / 2);
+          actx.drawImage(finalCanvas, 0, 0, finalCanvas.width, finalCanvas.height, dx, dy, drawW, drawH);
+          finalCanvas = a4;
+        }
+
+        setStatus(`[${i + 1}/${currentFiles.length}] Encoding to PNG...`);
+        const blob = await new Promise(res => finalCanvas.toBlob(res, 'image/png'));
+        if (!blob) throw new Error('Failed to encode PNG.');
+
+        const blobUrl = URL.createObjectURL(blob);
+        const outName = file.name.replace(/\.html?$/i, '') + '.png';
+
+        // Only compute base64 when running inside the Android wrapper, since it's
+        // unnecessary overhead in a normal browser where blob downloads work fine.
+        let base64Data = null;
+        if (isAndroid) {
+          base64Data = finalCanvas.toDataURL('image/png').split(',')[1];
+        }
+
+        // Push the result to the screen immediately so the user doesn't wait in the dark
+        appendResultCard(blobUrl, outName, finalCanvas.width, finalCanvas.height, base64Data);
+
+      } catch (err) {
+        console.error(`Error processing ${file.name}:`, err);
+        showError(`Failed to convert ${file.name}: ` + (err.message || 'Unknown error'));
+      } finally {
+        // We clean up the sandbox iframe after EVERY file to prevent browser memory crashes
+        if (frameInfo && frameInfo.iframe && frameInfo.iframe.parentNode) {
+          frameInfo.iframe.parentNode.removeChild(frameInfo.iframe);
+        }
+      }
+    } // End of For Loop
+    
+    hideStatus();
+    runBtn.disabled = false;
+    
+    // If they processed more than 1 file, show the magical Download All button
+    if (currentFiles.length > 1) {
+      downloadAllWrap.classList.add('show');
+    }
+  }
+
+  runBtn.addEventListener('click', convert);
+  
+  // DOWNLOAD ALL LOGIC
+  // In-browser: clicks each button with a slight delay so browsers don't block them.
+  // In Android: each click already routes through AndroidBridge.savePng, and a short
+  // delay still helps avoid hammering MediaStore with simultaneous writes.
+  downloadAllBtn.addEventListener('click', () => {
+    const buttons = document.querySelectorAll('.result .download-btn');
+    buttons.forEach((btn, index) => {
+      setTimeout(() => {
+        btn.click();
+      }, index * 400);
+    });
+  });
+
+})();
+</script>
+
+</body>
+</html>

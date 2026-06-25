@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Html2Png" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#1b1f23</item>
+        <item name="colorPrimaryDark">#1b1f23</item>
+        <item name="colorAccent">#cc5b3c</item>
+        <item name="android:windowBackground">#f7f5f0</item>
+    </style>
+</resources>
