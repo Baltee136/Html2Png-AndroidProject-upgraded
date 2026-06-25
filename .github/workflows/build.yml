@@ -1,5 +1,5 @@
-cat > .github/workflows/build.yml << 'EOF'
-name: Build Android App
+python3 << 'PYEOF'
+content = '''name: Build Android App
 
 on:
   push:
@@ -28,8 +28,7 @@ jobs:
 
       - name: Decode signing keystore
         if: env.HAS_SIGNING == 'true'
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
 
       - name: Build debug APK (always)
         run: ./gradlew assembleDebug
@@ -55,8 +54,8 @@ jobs:
         with:
           name: app-release-aab
           path: app/build/outputs/bundle/release/app-release.aab
-EOF
-
-git add .github/workflows/build.yml
-git commit -m "Fix workflow: move secrets check into env for step-level if"
-git push
+'''
+with open('.github/workflows/build.yml', 'w', encoding='utf-8', newline='\n') as f:
+    f.write(content)
+print("Written cleanly, no BOM, LF line endings")
+PYEOF
