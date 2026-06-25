@@ -1,3 +1,4 @@
+cat > .github/workflows/build.yml << 'EOF'
 name: Build Android App
 
 on:
@@ -8,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    env:
+      HAS_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
 
     steps:
       - name: Checkout repo
@@ -23,9 +27,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Decode signing keystore
-        if: ${{ env.SIGNING_AVAILABLE == 'true' }}
-        env:
-          SIGNING_AVAILABLE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: env.HAS_SIGNING == 'true'
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
 
@@ -33,7 +35,7 @@ jobs:
         run: ./gradlew assembleDebug
 
       - name: Build signed release AAB
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: env.HAS_SIGNING == 'true'
         env:
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -48,8 +50,13 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload release AAB
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: env.HAS_SIGNING == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
           path: app/build/outputs/bundle/release/app-release.aab
+EOF
+
+git add .github/workflows/build.yml
+git commit -m "Fix workflow: move secrets check into env for step-level if"
+git push
