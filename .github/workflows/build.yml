@@ -1,5 +1,4 @@
-python3 << 'PYEOF'
-content = '''name: Build Android App
+name: Build Android App
 
 on:
   push:
@@ -54,8 +53,3 @@ jobs:
         with:
           name: app-release-aab
           path: app/build/outputs/bundle/release/app-release.aab
-'''
-with open('.github/workflows/build.yml', 'w', encoding='utf-8', newline='\n') as f:
-    f.write(content)
-print("Written cleanly, no BOM, LF line endings")
-PYEOF
